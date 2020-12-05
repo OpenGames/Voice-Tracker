@@ -26,6 +26,8 @@ namespace VoiceTracker.Net.Classes
 
             public void SetValues(short[] values, float timespan)
             {
+                if (ApplyForward_Busy) return;
+
                 Timespan = timespan;
                 deltaTime = timespan / values.Length;
 
