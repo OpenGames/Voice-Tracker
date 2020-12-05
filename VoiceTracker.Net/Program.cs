@@ -11,6 +11,9 @@ using SharpDX.DirectSound;
 using SharpDX.Mathematics.Interop;
 using SharpDX.Multimedia;
 
+
+using VoiceTracker.Net.Classes;
+
 namespace VoiceTracker.Net
 {
     class Program
@@ -19,6 +22,10 @@ namespace VoiceTracker.Net
         static CaptureBufferDescription captureBufferDescription = new CaptureBufferDescription();
         static WaveFormat waveFormat = new WaveFormat(48000, 16, 1);
         static CaptureBuffer captureBuffer;
+
+        static MyMath.DFT FourierTransformer = new MyMath.DFT();
+
+        static float[] frequencies;
 
         static bool isWorking = true;
 
@@ -51,6 +58,11 @@ namespace VoiceTracker.Net
 
             captureBuffer = new CaptureBuffer(directSoundDeviceIn, captureBufferDescription);
 
+            frequencies = new float[20];
+            for (int i = 0; i < frequencies.Length; i++)
+            {
+                frequencies[i] = MyMath.DFT.FrequencyFromIndex(index, frequencies.Length, waveFormat.SampleRate / 2);
+            }
 
             Thread listenThread = new Thread(new ThreadStart(Listen)) { Name = "ListenThread", IsBackground = true };
             Thread infoThread = new Thread(new ThreadStart(DrawBufferInfo)) { Name = "DrawBufferInfoThread", IsBackground = true };
@@ -166,9 +178,12 @@ namespace VoiceTracker.Net
 
         static void DrawBufferInfo()
         {
+            int c = 0;
             while (isWorking)
             {
                 if (KeyboardListen_Drawing) continue;
+
+                if (c++ > 100) Console.Clear();
 
                 if (captureBuffer.Capturing)
                 {
@@ -188,8 +203,33 @@ namespace VoiceTracker.Net
                                   $"[   Amplitude   ]: {BufferAmp(ref _Buffer)}    \n";
 
                     Console.Write(text);
+
+                    Console.SetCursorPosition(15, 0);
+                    string[] textTable = new string[11];
+                    for (int i = 0; i < 11; i++)
+                    {
+                        textTable[i] = ("".PadLeft(25));
+                    }
+
+                    FourierTransformer.ApplyForward();
+
+                    float[] Amps = new float[frequencies.Length];
+                    for (int i = 0; i < frequencies.Length; i++)
+                    {
+                        Amps[i] = FourierTransformer.Amplitude(frequencies[i]);
+
+                        int Height = (int)(Amps[i] / 65535);
+                        for (int j = 0; j < Height; j++)
+                        {
+                            textTable[Height - j] = new StringBuilder(textTable[Height - j]) { [i + 5] = '#' }.ToString();
+                        }
+                        
+                    }
+
+                    text = string.Join("\n", textTable);
+                    Console.Write(text);
                 }
-                Thread.Sleep(50);
+                Thread.Sleep(100);
             }
         }
 
