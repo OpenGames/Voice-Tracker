@@ -109,8 +109,6 @@ namespace VoiceTracker.Net
                 Console.SetCursorPosition(pLeft, pTop);
 
                 KeyboardListen_Drawing = false;
-
-                Thread.Sleep(1);
             }
         }
         static void HandleCommand()
@@ -138,8 +136,14 @@ namespace VoiceTracker.Net
             }
         }
 
-        const int BufferSize = 9600;
+        const int BufferSize = 48000 * 2;
+        static long BufferCursor = 0;
         static short[] _Buffer = new short[BufferSize];
+        static bool stopFlag = false;
+
+        static DataStream kek2;
+        static DataStream kek;
+
         static void Listen()
         {
             while (isWorking)
@@ -147,18 +151,33 @@ namespace VoiceTracker.Net
                 if (captureBuffer.Capturing)
                 {
 
-                    if((captureBuffer.CurrentRealPosition > BufferSize) && !BufferAverage_Calculating && !BufferAmp_Calculating)
+                    if((!BufferAverage_Calculating && !BufferAmp_Calculating && !LastNValues_Busy) && !stopFlag)
                     {
                         int pos = captureBuffer.CurrentRealPosition;
 
                         int startIndex = (pos > BufferSize) ? pos - BufferSize : 0;
                         int count = (pos > BufferSize) ? ((pos + BufferSize > captureBufferDescription.BufferBytes) ? (captureBufferDescription.BufferBytes - pos) : BufferSize) : pos;
 
-                        captureBuffer.Read(_Buffer, 0, count, startIndex, LockFlags.None);
+                        if (count == 0) continue;
+
+                        kek = captureBuffer.Lock(startIndex, count, LockFlags.None, out kek2);
+
+                        byte[] _tmpBuf = new byte[count];
+                        kek.Read(_tmpBuf, 0, count);
+                        Buffer.BlockCopy(_tmpBuf, 0, _Buffer, (int)(BufferCursor % BufferSize), count);
+                        BufferCursor += count / 2;
+
+                        FourierTransformer.SetValues(LastNValues(ref _Buffer, 48000), 1.0f);
+
+                        captureBuffer.Unlock(kek, kek2);
+
+                        //stopFlag = true;
+
+                        //captureBuffer.Read(_Buffer, 0, count, startIndex, LockFlags.None);
                     }
 
                     dBytes = captureBuffer.CurrentCapturePosition - pCurrentCapturePosition;
-                    if (dBytes < 0) dBytes = 0;
+                    if (dBytes < 0) dBytes = dBytes + 192000;
                     pCurrentCapturePosition = captureBuffer.CurrentCapturePosition;
 
                     SecondsCaptured += 2 * (float)dBytes / captureBufferDescription.BufferBytes;
@@ -183,7 +202,7 @@ namespace VoiceTracker.Net
             {
                 if (KeyboardListen_Drawing) continue;
 
-                if (c++ > 100) Console.Clear();
+                if (c++ > 100) { c = 0; Console.Clear(); }
 
                 if (captureBuffer.Capturing)
                 {
@@ -193,18 +212,19 @@ namespace VoiceTracker.Net
                                   $"[     dBytes    ]: {dBytes                              }    \n" +
                                   $"[   CaptCurPos  ]: {captureBuffer.CurrentCapturePosition}    \n" +
                                   $"[   ReadCurPos  ]: {captureBuffer.CurrentRealPosition   }    \n" +
-                                  $"\n" +
-                                  $"\n" +
-                                  $"\n" +
+                                  $"[  BufferCursor ]: {BufferCursor}       \n" +
+                                  $"[    kek2stat   ]: {kek2}               \n" +
+                                  $"[    kek stat   ]: {kek}                \n" +
                                   $"\n" +
                                   $"\n" +
                                   $"\n" +
                                   $"[ Average Value ]: {BufferAverage(ref _Buffer)}    \n" +
-                                  $"[   Amplitude   ]: {BufferAmp(ref _Buffer)}    \n";
+                                  $"[   Amplitude   ]: {BufferAmp(ref _Buffer)}    \n" + 
+                                  $"[   Main Freq   ]: {FourierTransformer.MaxAmpFreq()}    \n";
 
                     Console.Write(text);
 
-                    Console.SetCursorPosition(15, 0);
+                    Console.SetCursorPosition(0, 15);
                     string[] textTable = new string[11];
                     for (int i = 0; i < 11; i++)
                     {
@@ -213,21 +233,21 @@ namespace VoiceTracker.Net
 
                     FourierTransformer.ApplyForward();
 
-                    float[] Amps = new float[frequencies.Length];
-                    for (int i = 0; i < frequencies.Length; i++)
-                    {
-                        Amps[i] = FourierTransformer.Amplitude(frequencies[i]);
+                    //float[] Amps = new float[frequencies.Length];
+                    //for (int i = 0; i < frequencies.Length; i++)
+                    //{
+                    //    Amps[i] = FourierTransformer.Amplitude(frequencies[i]);
 
-                        int Height = (int)(Amps[i] / 65535);
-                        for (int j = 0; j < Height; j++)
-                        {
-                            textTable[Height - j] = new StringBuilder(textTable[Height - j]) { [i + 5] = '#' }.ToString();
-                        }
+                    //    int Height = (int)(Amps[i] / 65535);
+                    //    for (int j = 0; j < Height; j++)
+                    //    {
+                    //        textTable[Height - j] = new StringBuilder(textTable[Height - j]) { [i + 5] = '#' }.ToString();
+                    //    }
                         
-                    }
+                    //}
 
-                    text = string.Join("\n", textTable);
-                    Console.Write(text);
+                    //text = string.Join("\n", textTable);
+                    //Console.Write(text);
                 }
                 Thread.Sleep(100);
             }
@@ -259,6 +279,26 @@ namespace VoiceTracker.Net
 
             BufferAmp_Calculating = false;
             return result;
+        }
+
+        static bool LastNValues_Busy;
+        static short[] LastNValues(ref short[] refBuffer, int count)
+        {
+            LastNValues_Busy = true;
+            short[] result = new short[count];
+
+            if((BufferCursor % BufferSize) >= count)
+            {
+                Array.Copy(refBuffer, (BufferCursor % BufferSize) - count, result, 0, count);
+            }
+            else
+            {
+                Array.Copy(refBuffer, BufferSize - (count - (BufferCursor % BufferSize)), result, 0, count - (BufferCursor % BufferSize) - 1);
+                Array.Copy(refBuffer, 0, result, count - (BufferCursor % BufferSize), (BufferCursor % BufferSize));
+            }
+            LastNValues_Busy = false;
+            return result;
+
         }
     }
 }

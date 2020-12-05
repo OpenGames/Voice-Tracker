@@ -1,4 +1,5 @@
-﻿using System;
+﻿using FFTW.NET;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
@@ -16,20 +17,19 @@ namespace VoiceTracker.Net.Classes
         public class DFT
         {
 
-            private float[] Values;
+            private short[] Values;
             private float[] Amplitudes;
             private float Timespan;
             private float deltaTime;
 
             public bool Busy { get => ApplyForward_Busy; }
 
-            public void SetValues(float[] values, float timespan)
+            public void SetValues(short[] values, float timespan)
             {
                 Timespan = timespan;
                 deltaTime = timespan / values.Length;
 
                 Values = values;
-                Amplitudes = new float[values.Length / 2];
             }
 
             private bool ApplyForward_Busy = false;
@@ -39,24 +39,46 @@ namespace VoiceTracker.Net.Classes
 
                 ApplyForward_Busy = true;
 
+                Amplitudes = new float[Values.Length / 2];
+
+                Complex[] input = new Complex[Values.Length];
+                for (int i = 0; i < Values.Length; i++)
+                {
+                    input[i] = new Complex(Values[i], 0);
+                }
+                Complex[] output = new Complex[Values.Length];
+
+                using (var pinIn = new PinnedArray<Complex>(input))
+                using (var pinOut = new PinnedArray<Complex>(output))
+                {
+                    FFTW.NET.DFT.FFT(pinIn, pinOut);
+                }
+
                 for (int k = 0; k < Values.Length / 2; k++)
                 {
-                    Complex Amp = 0;
-                    var N = Values.Length;
-                    for (int n = 0; n < Values.Length; n++)
-                    {
-                        Amp += Values[n] * Complex.Exp(-2 * Math.PI * Complex.ImaginaryOne * k * n / N);
-                    }
-
-                    Amplitudes[k] = (float)Amp.Magnitude / N;
+                    Amplitudes[k] = (float)output[k].Magnitude / Values.Length;
                 }
+
+                //
+
+                //for (int k = 0; k < Values.Length / 2; k++)
+                //{
+                //    Complex Amp = 0;
+                //    var N = Values.Length;
+                //    for (int n = 0; n < Values.Length; n++)
+                //    {
+                //        Amp += Values[n] * Complex.Exp(-2 * Math.PI * Complex.ImaginaryOne * k * n / N);
+                //    }
+
+                //    Amplitudes[k] = (float)Amp.Magnitude / N;
+                //}
 
                 ApplyForward_Busy = false;
             }
 
             public float Amplitude(float Frequency)
             {
-                if (Values == null) return 0;
+                if (Amplitudes == null) return 0;
 
                 //Get k value. F = k / T => k = F*T
                 var K = (int)Math.Round(Frequency * this.Timespan);
@@ -65,9 +87,16 @@ namespace VoiceTracker.Net.Classes
                 return Amplitude;
             }
 
+            public float MaxAmpFreq()
+            {
+                if (Amplitudes == null) return 0;
+
+                return Array.IndexOf(Amplitudes, Amplitudes.Max());
+            }
+
             public static float FrequencyFromIndex(int index, int maxIndex, float maxFrequency)
             {
-                return maxFrequency * (float)Math.Log(index / maxIndex + 1);
+                return maxFrequency * (float)Math.Log((float)index / maxIndex + 1);
             }
 
             public void Clear()
@@ -78,5 +107,6 @@ namespace VoiceTracker.Net.Classes
             }
 
         }
+
     }
 }
