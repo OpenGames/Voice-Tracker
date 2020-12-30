@@ -241,9 +241,6 @@ namespace VoiceTracker.Net
                     for (int i = 0; i < frequencies.Length; i++)
                     {
                         Amps[i] = FourierTransformer.Amplitude(frequencies[i], frequencies[i] / frequencies.Length);
-
-                        
-
                     }
 
                     for (int i = 0; i < Amps.Length; i++)
@@ -252,7 +249,7 @@ namespace VoiceTracker.Net
                         if (Height > 10) Height = 10;
                         for (int j = 0; j < Height; j++)
                         {
-                            textTable[j] = new StringBuilder(textTable[j]) { [i + 5] = '#' }.ToString();
+                            textTable[10 - j] = new StringBuilder(textTable[10 - j]) { [i + 5] = '#' }.ToString();
                         }
                     }
 
