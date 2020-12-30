@@ -16,3 +16,6 @@ C:\Users\zecos\source\repos\VoiceTracker.Net\VoiceTracker.Net\bin\Release\libfft
 C:\Users\zecos\source\repos\VoiceTracker.Net\VoiceTracker.Net\bin\Release\FFTW.NET.dll
 C:\Users\zecos\source\repos\VoiceTracker.Net\VoiceTracker.Net\bin\Release\System.Diagnostics.DiagnosticSource.dll
 C:\Users\zecos\source\repos\VoiceTracker.Net\VoiceTracker.Net\bin\Release\System.Diagnostics.DiagnosticSource.xml
+C:\Users\zecos\source\repos\VoiceTracker.Net\VoiceTracker.Net\bin\Release\SharpDX.Mathematics.dll
+C:\Users\zecos\source\repos\VoiceTracker.Net\VoiceTracker.Net\bin\Release\SharpDX.Mathematics.pdb
+C:\Users\zecos\source\repos\VoiceTracker.Net\VoiceTracker.Net\bin\Release\SharpDX.Mathematics.xml

@@ -23,7 +23,7 @@ namespace VoiceTracker.Net
         static WaveFormat waveFormat = new WaveFormat(48000, 16, 1);
         static CaptureBuffer captureBuffer;
 
-        static MyMath.DFT FourierTransformer = new MyMath.DFT();
+        static MyMath.DFT FourierTransformer;// = new MyMath.DFT();
 
         static float[] frequencies;
 
@@ -58,10 +58,12 @@ namespace VoiceTracker.Net
 
             captureBuffer = new CaptureBuffer(directSoundDeviceIn, captureBufferDescription);
 
-            frequencies = new float[20];
+
+            FourierTransformer = new MyMath.DFT(MyMath.DFT.DFTModes.FFTW, waveFormat.SampleRate);
+            frequencies = new float[60];
             for (int i = 0; i < frequencies.Length; i++)
             {
-                frequencies[i] = MyMath.DFT.FrequencyFromIndex(index, frequencies.Length, waveFormat.SampleRate / 2);
+                frequencies[i] = MyMath.DFT.FrequencyFromIndex(i, frequencies.Length, 1500);
             }
 
             Thread listenThread = new Thread(new ThreadStart(Listen)) { Name = "ListenThread", IsBackground = true };
@@ -202,54 +204,62 @@ namespace VoiceTracker.Net
             {
                 if (KeyboardListen_Drawing) continue;
 
-                if (c++ > 100) { c = 0; Console.Clear(); }
+                //if (c++ > 100) { c = 0; Console.Clear(); }
 
                 if (captureBuffer.Capturing)
                 {
                     Console.SetCursorPosition(0, 0);
-                    string text = $"[  ReadCounter  ]: {ReadCounter++                       }    \n" +
-                                  $"[SecondsCaptured]: {SecondsCaptured                     }    \n" +
-                                  $"[     dBytes    ]: {dBytes                              }    \n" +
-                                  $"[   CaptCurPos  ]: {captureBuffer.CurrentCapturePosition}    \n" +
-                                  $"[   ReadCurPos  ]: {captureBuffer.CurrentRealPosition   }    \n" +
-                                  $"[  BufferCursor ]: {BufferCursor}       \n" +
-                                  $"[    kek2stat   ]: {kek2}               \n" +
-                                  $"[    kek stat   ]: {kek}                \n" +
+                    string text = $"[  ReadCounter  ]: {ReadCounter++                       }       \n" +
+                                  $"[SecondsCaptured]: {SecondsCaptured                     }       \n" +
+                                  $"[     dBytes    ]: {dBytes                              }       \n" +
+                                  $"[   CaptCurPos  ]: {captureBuffer.CurrentCapturePosition}       \n" +
+                                  $"[   ReadCurPos  ]: {captureBuffer.CurrentRealPosition   }       \n" +
+                                  $"[  BufferCursor ]: {BufferCursor}           \n" +
+                                  $"[    kek2stat   ]: {kek2}                   \n" +
+                                  $"[    kek stat   ]: {kek}                    \n" +
                                   $"\n" +
+                                  $"[   LoadStatus  ]: {FourierTransformer.Loaded} [{FourierTransformer.LoadString}] ({FourierTransformer.LoadProgress}%)         \n" +
                                   $"\n" +
-                                  $"\n" +
-                                  $"[ Average Value ]: {BufferAverage(ref _Buffer)}    \n" +
-                                  $"[   Amplitude   ]: {BufferAmp(ref _Buffer)}    \n" + 
-                                  $"[   Main Freq   ]: {FourierTransformer.MaxAmpFreq()}    \n";
+                                  $"[ Average Value ]: {BufferAverage(ref _Buffer)}         \n" +
+                                  $"[   Amplitude   ]: {BufferAmp(ref _Buffer)}             \n" + 
+                                  $"[   Main Freq   ]: {FourierTransformer.MaxAmpFreq()} (val: {FourierTransformer.Amplitude(FourierTransformer.MaxAmpFreq(), 0)})        \n";
 
                     Console.Write(text);
+
+                    if (!FourierTransformer.Loaded) continue;
 
                     Console.SetCursorPosition(0, 15);
                     string[] textTable = new string[11];
                     for (int i = 0; i < 11; i++)
                     {
-                        textTable[i] = ("".PadLeft(25));
+                        textTable[i] = ("".PadLeft(frequencies.Length + 5));
                     }
 
                     FourierTransformer.ApplyForward();
 
-                    //float[] Amps = new float[frequencies.Length];
-                    //for (int i = 0; i < frequencies.Length; i++)
-                    //{
-                    //    Amps[i] = FourierTransformer.Amplitude(frequencies[i]);
+                    float[] Amps = new float[frequencies.Length];
+                    for (int i = 0; i < frequencies.Length; i++)
+                    {
+                        Amps[i] = FourierTransformer.Amplitude(frequencies[i], frequencies[i] / frequencies.Length);
 
-                    //    int Height = (int)(Amps[i] / 65535);
-                    //    for (int j = 0; j < Height; j++)
-                    //    {
-                    //        textTable[Height - j] = new StringBuilder(textTable[Height - j]) { [i + 5] = '#' }.ToString();
-                    //    }
                         
-                    //}
 
-                    //text = string.Join("\n", textTable);
-                    //Console.Write(text);
+                    }
+
+                    for (int i = 0; i < Amps.Length; i++)
+                    {
+                        int Height = (int)(10.0f * Amps[i] / Amps.Max()); // (int)([i] / 300);
+                        if (Height > 10) Height = 10;
+                        for (int j = 0; j < Height; j++)
+                        {
+                            textTable[j] = new StringBuilder(textTable[j]) { [i + 5] = '#' }.ToString();
+                        }
+                    }
+
+                    text = string.Join("\n", textTable);
+                    Console.Write(text);
                 }
-                Thread.Sleep(100);
+                Thread.Sleep(15);
             }
         }
 
